@@ -15,13 +15,13 @@ use partition::{
 	squareness,
 };
 
-const FS_URL: &str = "10.1.0.193:8000";
-const FS_WIDTH: u16 = 1680;
-const FS_HEIGHT: u16 = 1050;
-
 async fn section_listener(
 	dims: (usize, usize),
 	coords: (usize, usize),
+	width: u16,
+	height: u16,
+	flip_x: bool,
+	flip_y: bool,
 	listener: TcpListener,
 	tx: Sender<Vec<u8>>,
 ) -> std::io::Result<()> {
@@ -45,11 +45,15 @@ async fn section_listener(
 					continue;
 				}
 
-				x += coords.clone().0 as u16;
-				// x = FS_WIDTH - x;
+				x += coords.0 as u16;
+				if flip_x {
+					x = width - x;
+				}
 
-				y += coords.clone().1 as u16;
-				// y = FS_HEIGHT - y;
+				y += coords.1 as u16;
+				if flip_y {
+					y = height - y;
+				}
 
 				let x_bytes = x.to_be_bytes();
 				let y_bytes = y.to_be_bytes();
@@ -73,6 +77,15 @@ async fn main() -> std::io::Result<()> {
 		.about(env!("CARGO_PKG_DESCRIPTION"))
 		.arg_required_else_help(true)
 		.arg(
+			Arg::new("fs_url")
+				.short('u')
+				.long("fs-url")
+				.help("The URL of the Francis-Scherm TCP socket")
+				.action(ArgAction::Set)
+				.value_parser(clap::value_parser!(String))
+				.required(true),
+		)
+		.arg(
 			Arg::new("width")
 				.short('x')
 				.long("width")
@@ -91,6 +104,18 @@ async fn main() -> std::io::Result<()> {
 				.required(true),
 		)
 		.arg(
+			Arg::new("flip_x")
+				.long("flip-x")
+				.help("Flip the image along the x axis")
+				.action(ArgAction::SetTrue),
+		)
+		.arg(
+			Arg::new("flip_y")
+				.long("flip-y")
+				.help("Flip the image along the y axis")
+				.action(ArgAction::SetTrue),
+		)
+		.arg(
 			Arg::new("sections")
 				.short('n')
 				.long("sections")
@@ -102,20 +127,12 @@ async fn main() -> std::io::Result<()> {
 		.get_matches();
 
 	// Unwraps are safe as arguments are required
+	let fs_url = matches.get_one::<String>("fs_url").unwrap();
 	let width = *matches.get_one::<usize>("width").unwrap();
-	if width as u16 > FS_WIDTH {
-		panic!(
-			"Virtual width cannot be larger then the actual width ({FS_WIDTH}) of Francis scherm"
-		);
-	}
 	let height = *matches.get_one::<usize>("height").unwrap();
-	if height as u16 > FS_HEIGHT {
-		panic!(
-			"Virtual height cannot be larger then the actual height ({FS_HEIGHT}) of Francis \
-			 scherm"
-		);
-	}
 	let sections = *matches.get_one::<usize>("sections").unwrap();
+	let flip_x = matches.get_flag("flip_x");
+	let flip_y = matches.get_flag("flip_y");
 
 	println!("Partitioning {width}x{height} screen into {sections} sections...");
 	let partitioning = create_partitioning(width, height, sections);
@@ -136,13 +153,22 @@ async fn main() -> std::io::Result<()> {
 		let listener = TcpListener::bind(&socket_url).await?;
 
 		println!("listener {i}: {:?} {:?}", sect_dims, sect_coords);
-		tokio::spawn(section_listener(sect_dims, sect_coords, listener, tx.clone()));
+		tokio::spawn(section_listener(
+			sect_dims,
+			sect_coords,
+			width as u16,
+			height as u16,
+			flip_x,
+			flip_y,
+			listener,
+			tx.clone(),
+		));
 
 		println!("Created socket for {}", &socket_url);
 	}
 
-	println!("Connecting to Francis-Scherm ({})", FS_URL);
-	let mut fs_socket = TcpStream::connect(FS_URL).await?;
+	println!("Connecting to Francis-Scherm ({})", fs_url);
+	let mut fs_socket = TcpStream::connect(fs_url).await?;
 
 	println!("Running!");
 
