@@ -16,6 +16,8 @@ use partition::{
 };
 
 const FS_URL: &str = "10.1.0.193:8000";
+const FS_WIDTH: u16 = 1680;
+const FS_HEIGHT: u16 = 1050;
 
 async fn section_listener(
 	dims: (usize, usize),
@@ -30,7 +32,7 @@ async fn section_listener(
 
 		tokio::spawn(async move {
 			loop {
-				let mut buf = [0u8; 10];
+				let mut buf = [0u8; 7];
 				match stream.read_exact(&mut buf).await {
 					Ok(_) => (),
 					Err(_) => break,
@@ -43,13 +45,11 @@ async fn section_listener(
 					continue;
 				}
 
-				x += coords.0 as u16;
-				x = 1680 - x - 1;
+				x += coords.clone().0 as u16;
+				// x = FS_WIDTH - x;
 
-				y += coords.1 as u16;
-				y = 1050 - y - 1;
-
-				println!("x:{} y:{}", x, y);
+				y += coords.clone().1 as u16;
+				// y = FS_HEIGHT - y;
 
 				let x_bytes = x.to_be_bytes();
 				let y_bytes = y.to_be_bytes();
@@ -103,7 +103,18 @@ async fn main() -> std::io::Result<()> {
 
 	// Unwraps are safe as arguments are required
 	let width = *matches.get_one::<usize>("width").unwrap();
+	if width as u16 > FS_WIDTH {
+		panic!(
+			"Virtual width cannot be larger then the actual width ({FS_WIDTH}) of Francis scherm"
+		);
+	}
 	let height = *matches.get_one::<usize>("height").unwrap();
+	if height as u16 > FS_HEIGHT {
+		panic!(
+			"Virtual height cannot be larger then the actual height ({FS_HEIGHT}) of Francis \
+			 scherm"
+		);
+	}
 	let sections = *matches.get_one::<usize>("sections").unwrap();
 
 	println!("Partitioning {width}x{height} screen into {sections} sections...");
