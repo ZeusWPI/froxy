@@ -3,34 +3,35 @@
 use clap::{Arg, ArgAction, Command};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc::{self, Sender};
 
 mod partition;
 
-use partition::{
-	create_partitioning,
-	create_virtual_screens,
-	print_partitioning,
-	print_virtual_screens,
-	squareness,
-};
+use partition::{create_partitioning, create_virtual_screens, print_virtual_screens, squareness};
 
 async fn section_listener(
 	dims: (usize, usize),
 	coords: (usize, usize),
+	fs_url: String,
 	width: u16,
 	height: u16,
 	flip_x: bool,
 	flip_y: bool,
 	listener: TcpListener,
-	tx: Sender<Vec<u8>>,
 ) -> std::io::Result<()> {
 	loop {
 		let (mut stream, _) = listener.accept().await?;
 		println!("got connection");
-		let tx = tx.clone();
 
+		let fs_url = fs_url.clone();
 		tokio::spawn(async move {
+			let mut fs_socket = match TcpStream::connect(fs_url).await {
+				Ok(s) => s,
+				Err(e) => {
+					println!("Could not connect to Francis-Scherm\n{}", e);
+					return;
+				},
+			};
+
 			loop {
 				let mut buf = [0u8; 7];
 				match stream.read_exact(&mut buf).await {
@@ -63,7 +64,7 @@ async fn section_listener(
 				buf[2] = y_bytes[0];
 				buf[3] = y_bytes[1];
 
-				let _ = tx.send(buf.to_vec()).await;
+				let _ = fs_socket.write_all(&buf).await;
 			}
 		});
 	}
@@ -136,49 +137,42 @@ async fn main() -> std::io::Result<()> {
 
 	println!("Partitioning {width}x{height} screen into {sections} sections...");
 	let partitioning = create_partitioning(width, height, sections);
-	println!("Found partitioning with squareness {}:", squareness(&partitioning));
-	print_partitioning(&partitioning);
+	println!("Found partitioning with squareness {}", squareness(&partitioning));
 
 	let virtual_screens = create_virtual_screens(&partitioning);
 	println!("Virtual screens:");
 	print_virtual_screens(&partitioning, &virtual_screens);
 
-	let (tx, mut rx) = mpsc::channel::<Vec<u8>>(128);
-
 	println!("Creating virtual screen sockets...");
+	let mut handles = vec![];
 	for i in 0..sections {
 		let sect_dims = partitioning.iter().flatten().nth(i).unwrap().to_owned();
 		let sect_coords = virtual_screens.iter().flatten().nth(i).unwrap().to_owned();
 		let socket_url = format!("0.0.0.0:{}", 8000 + i);
 		let listener = TcpListener::bind(&socket_url).await?;
 
-		println!("listener {i}: {:?} {:?}", sect_dims, sect_coords);
-		tokio::spawn(section_listener(
+		let handle = tokio::spawn(section_listener(
 			sect_dims,
 			sect_coords,
+			fs_url.to_owned(),
 			width as u16,
 			height as u16,
 			flip_x,
 			flip_y,
 			listener,
-			tx.clone(),
 		));
+		handles.push(handle);
 
-		println!("Created socket for {}", &socket_url);
+		println!("Created socket on {}", &socket_url);
+		println!("Dimensions ({}x{})", sect_dims.0, sect_dims.1);
+		println!("Coords ({}; {})", sect_coords.0, sect_coords.1);
+		println!("");
 	}
-
-	println!("Connecting to Francis-Scherm ({})", fs_url);
-	let mut fs_socket = TcpStream::connect(fs_url).await?;
 
 	println!("Running!");
 
-	loop {
-		let msg = rx.recv().await;
-		if msg.is_none() {
-			break;
-		}
-
-		fs_socket.write_all(msg.unwrap().as_ref()).await?;
+	for handle in handles {
+		handle.await??;
 	}
 
 	Ok(())

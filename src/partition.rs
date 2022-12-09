@@ -78,16 +78,6 @@ pub(super) fn squareness(v: &[Vec<(usize, usize)>]) -> isize {
 	v.iter().flatten().map(|part| (part.0 as isize - part.1 as isize).pow(2)).sum()
 }
 
-/// Pretty print a specific partitioning
-pub(super) fn print_partitioning(partitioning: &[Vec<(usize, usize)>]) {
-	for row in partitioning {
-		for rect in row {
-			print!("{}x{} ", rect.0, rect.1);
-		}
-		println!("");
-	}
-}
-
 /// Find the optimal partitioning for a screen of a given width and height into
 /// a given number of sections
 pub(super) fn create_partitioning(

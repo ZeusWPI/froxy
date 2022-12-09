@@ -8,7 +8,7 @@ sockets = []
 colors = []
 start_port = 8000
 
-partitions = 15
+partitions = 4
 
 for i in range(partitions):
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -17,8 +17,8 @@ for i in range(partitions):
     colors.append(None)
     # colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
 
-w = 300
-h = 333
+w = 840
+h = 525
 
 while True:
     for i in range(partitions):
@@ -32,7 +32,7 @@ while True:
             for y in range(h):
                 coords.append((x, y))
 
-        random.shuffle(coords)
+        # random.shuffle(coords)
         for (x, y) in coords:
             # print(x, y)
             packet.append(struct.pack('>HHBBB', x, y, colors[i][0], colors[i][1], colors[i][2]))
