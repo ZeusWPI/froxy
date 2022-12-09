@@ -10,8 +10,8 @@ use partition::{create_partitioning, create_virtual_screens, print_virtual_scree
 
 async fn section_listener(
 	dims: (u16, u16),
-	virt_dims: (usize, usize),
-	coords: (usize, usize),
+	virt_dims: (u16, u16),
+	coords: (u16, u16),
 	fs_url: String,
 	flip_x: bool,
 	flip_y: bool,
@@ -21,8 +21,8 @@ async fn section_listener(
 		let (mut stream, _) = listener.accept().await?;
 		println!("got connection");
 
-		let x_bytes = coords.0.to_be_bytes();
-		let y_bytes = coords.1.to_be_bytes();
+		let x_bytes = virt_dims.0.to_be_bytes();
+		let y_bytes = virt_dims.1.to_be_bytes();
 		let coord_bytes = [x_bytes, y_bytes].concat();
 
 		stream.write_all(&coord_bytes).await?;
@@ -47,16 +47,16 @@ async fn section_listener(
 				let mut x = u16::from_be_bytes(buf[0..2].try_into().unwrap());
 				let mut y = u16::from_be_bytes(buf[2..4].try_into().unwrap());
 
-				if x as usize >= virt_dims.0 || y as usize >= virt_dims.1 {
+				if x >= virt_dims.0 || y >= virt_dims.1 {
 					continue;
 				}
 
-				x += coords.0 as u16;
+				x += coords.0;
 				if flip_x {
 					x = dims.0 - x;
 				}
 
-				y += coords.1 as u16;
+				y += coords.1;
 				if flip_y {
 					y = dims.1 - y;
 				}
@@ -140,8 +140,20 @@ async fn main() -> std::io::Result<()> {
 	println!("Creating virtual screen sockets...");
 	let mut handles = vec![];
 	for i in 0..sections {
-		let sect_dims = partitioning.iter().flatten().nth(i).unwrap().to_owned();
-		let sect_coords = virtual_screens.iter().flatten().nth(i).unwrap().to_owned();
+		let sect_dims = partitioning
+			.iter()
+			.flatten()
+			.nth(i)
+			.map(|p| (p.0 as u16, p.1 as u16))
+			.unwrap()
+			.to_owned();
+		let sect_coords = virtual_screens
+			.iter()
+			.flatten()
+			.nth(i)
+			.map(|p| (p.0 as u16, p.1 as u16))
+			.unwrap()
+			.to_owned();
 		let socket_url = format!("0.0.0.0:{}", 8000 + i);
 		let listener = TcpListener::bind(&socket_url).await?;
 
