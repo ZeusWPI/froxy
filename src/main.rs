@@ -22,6 +22,12 @@ async fn section_listener(
 		let (mut stream, _) = listener.accept().await?;
 		println!("got connection");
 
+		let x_bytes = coords.0.to_be_bytes();
+		let y_bytes = coords.1.to_be_bytes();
+		let coord_bytes = [x_bytes, y_bytes].concat();
+
+		stream.write_all(&coord_bytes).await?;
+
 		let fs_url = fs_url.clone();
 		tokio::spawn(async move {
 			let mut fs_socket = match TcpStream::connect(fs_url).await {
