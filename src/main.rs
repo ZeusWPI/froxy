@@ -93,24 +93,6 @@ async fn main() -> std::io::Result<()> {
 				.required(true),
 		)
 		.arg(
-			Arg::new("width")
-				.short('x')
-				.long("width")
-				.help("The total width of the Francis-Scherm servers screen")
-				.action(ArgAction::Set)
-				.value_parser(clap::value_parser!(usize))
-				.required(true),
-		)
-		.arg(
-			Arg::new("height")
-				.short('y')
-				.long("height")
-				.help("The total height of the Francis-Scherm servers screen")
-				.action(ArgAction::Set)
-				.value_parser(clap::value_parser!(usize))
-				.required(true),
-		)
-		.arg(
 			Arg::new("flip_x")
 				.long("flip-x")
 				.help("Flip the image along the x axis")
@@ -135,11 +117,18 @@ async fn main() -> std::io::Result<()> {
 
 	// Unwraps are safe as arguments are required
 	let fs_url = matches.get_one::<String>("fs_url").unwrap();
-	let width = *matches.get_one::<usize>("width").unwrap();
-	let height = *matches.get_one::<usize>("height").unwrap();
 	let sections = *matches.get_one::<usize>("sections").unwrap();
 	let flip_x = matches.get_flag("flip_x");
 	let flip_y = matches.get_flag("flip_y");
+
+	println!("Querying dimensions from Francis-Scherm...");
+	let mut fs_socket = TcpStream::connect(fs_url).await?;
+	let mut size_buf = [0; 4];
+	fs_socket.read_exact(&mut size_buf).await?;
+	drop(fs_socket);
+
+	let width = u16::from_be_bytes(size_buf[0..2].try_into().unwrap()) as usize;
+	let height = u16::from_be_bytes(size_buf[2..4].try_into().unwrap()) as usize;
 
 	println!("Partitioning {width}x{height} screen into {sections} sections...");
 	let partitioning = create_partitioning(width, height, sections);
