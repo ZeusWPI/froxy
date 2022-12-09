@@ -53,10 +53,10 @@ fn partitioning_to_rects(
 	let mut rects = vec![];
 
 	let rows = partitioning.len();
-	let rect_height = (height / rows) as usize;
+	let rect_height = height / rows;
 
 	for cols in partitioning {
-		let rect_width = (width / cols) as usize;
+		let rect_width = width / cols;
 
 		let mut row_rects = vec![];
 		for _ in 0..*cols {
@@ -92,7 +92,7 @@ pub(super) fn create_partitioning(
 		.map(|p| partitioning_to_rects(width, height, p))
 		.collect::<Vec<Vec<Vec<(usize, usize)>>>>();
 
-	partitioned_rects.sort_by(|a, b| squareness(a).cmp(&squareness(b)));
+	partitioned_rects.sort_by_key(|a| squareness(a));
 
 	partitioned_rects[0].to_vec()
 }
@@ -108,7 +108,7 @@ pub(super) fn create_virtual_screens(
 		let mut running_width = 0;
 		let mut row_virt_screens = vec![];
 		for rect in row {
-			row_virt_screens.push((running_width as usize, running_height as usize));
+			row_virt_screens.push((running_width, running_height));
 
 			running_width += rect.0;
 		}
@@ -185,14 +185,14 @@ pub(super) fn print_virtual_screens(
 
 	for _ in virt_screens.last().unwrap() {
 		let cols = virt_screens.last().unwrap().len();
-		let col_ratio = (max_cols - cols as f32 + 1f32) / max_cols as f32;
-		let scaled_width = (repr_width as f32 * col_ratio) as usize;
+		let col_ratio = (max_cols - cols as f32 + 1f32) / max_cols;
+		let scaled_width = (repr_width * col_ratio) as usize;
 
 		lines[line_idx].push_str(&format!("+{}", "-".repeat(scaled_width - 1)));
 	}
 	lines[line_idx].push('+');
 
 	for line in lines {
-		println!("{}", line);
+		println!("{line}");
 	}
 }

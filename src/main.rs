@@ -9,11 +9,10 @@ mod partition;
 use partition::{create_partitioning, create_virtual_screens, print_virtual_screens, squareness};
 
 async fn section_listener(
-	dims: (usize, usize),
+	dims: (u16, u16),
+	virt_dims: (usize, usize),
 	coords: (usize, usize),
 	fs_url: String,
-	width: u16,
-	height: u16,
 	flip_x: bool,
 	flip_y: bool,
 	listener: TcpListener,
@@ -33,7 +32,7 @@ async fn section_listener(
 			let mut fs_socket = match TcpStream::connect(fs_url).await {
 				Ok(s) => s,
 				Err(e) => {
-					println!("Could not connect to Francis-Scherm\n{}", e);
+					println!("Could not connect to Francis-Scherm\n{e}");
 					return;
 				},
 			};
@@ -48,18 +47,18 @@ async fn section_listener(
 				let mut x = u16::from_be_bytes(buf[0..2].try_into().unwrap());
 				let mut y = u16::from_be_bytes(buf[2..4].try_into().unwrap());
 
-				if x as usize >= dims.0 || y as usize >= dims.1 {
+				if x as usize >= virt_dims.0 || y as usize >= virt_dims.1 {
 					continue;
 				}
 
 				x += coords.0 as u16;
 				if flip_x {
-					x = width - x;
+					x = dims.0 - x;
 				}
 
 				y += coords.1 as u16;
 				if flip_y {
-					y = height - y;
+					y = dims.1 - y;
 				}
 
 				let x_bytes = x.to_be_bytes();
@@ -147,11 +146,10 @@ async fn main() -> std::io::Result<()> {
 		let listener = TcpListener::bind(&socket_url).await?;
 
 		let handle = tokio::spawn(section_listener(
+			(width as u16, height as u16),
 			sect_dims,
 			sect_coords,
 			fs_url.to_owned(),
-			width as u16,
-			height as u16,
 			flip_x,
 			flip_y,
 			listener,
@@ -160,8 +158,7 @@ async fn main() -> std::io::Result<()> {
 
 		println!("Created socket on {}", &socket_url);
 		println!("Dimensions ({}x{})", sect_dims.0, sect_dims.1);
-		println!("Coords ({}; {})", sect_coords.0, sect_coords.1);
-		println!("");
+		println!("Coords ({}; {})\n", sect_coords.0, sect_coords.1);
 	}
 
 	println!("Running!");
